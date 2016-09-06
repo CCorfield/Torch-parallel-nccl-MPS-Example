@@ -16,19 +16,19 @@ This package has a dependency on `libzmq` and `libzmq-dev` -- in my Ubuntu envir
 ## nVidia-MPS:
 Now consider the following situation: multiple copies of a neural net resident on multiple GPUs, which may include several copies of the net on each GPU. You can imagine running separate training harnesses for each instance, training each net independently, and at some point saving each net and combining them (e.g., take an average of the parameters). This feels clumsy and certainly not in the spirit of parallel processing. Consider one of the problems with this approach: time slicing on a GPU. nVidia GPUs will happily support multiple processes and users sharing a GPU, but as nVidia points out, the processor will grant exclusive access to the client processes in a round-robin fashion and since each process is unlikely to fully occupy all the cores of the GPU, it won’t be using all the processing power that is available. nVidia has partially addressed this issue with its “MPS” – Multi-Process Service – which allows computing requests from multiple processes run by the same user to be interleaved leading to greater occupancy of the GPU. To set up your GPUs to use MPS you can do the following:
 
-1.	Stop all the processes which are using the GPU. If you are using a Linux box with X-Windows, you can stop it with:
+Stop all the processes which are using the GPU. If you are using a Linux box with X-Windows, you can stop it with:
 
 	$> sudo service lightdm stop
 
 You may want to log in from a remote shell before stopping X.
 
-2.	Set the GPUs to exclusive compute mode. You may need to be root to do this:
+Set the GPUs to exclusive compute mode. You may need to be root to do this:
 	
 	$> sudo nvidia-smi -i <dev#> -c EXCLUSIVE_PROCESS
 
 	The reason for this is that a process called `mps-server` will be the middleman brokering all computing requests into the GPU and only mps-server at a time can serve in this capacity for a given GPU.
 	
-3.	Now specify which GPUs are going to be part of the multi-process ensemble. In general you can partition your GPUs into disjoint groups, where each group can run a multi-process training ensemble. To set up a group, do the following as root:
+Now specify which GPUs are going to be part of the multi-process ensemble. In general you can partition your GPUs into disjoint groups, where each group can run a multi-process training ensemble. To set up a group, do the following as root:
 
 	$> export CUDA_VISIBLE_DEVICES=<dev#1>,<dev#2>,...
 	
@@ -73,7 +73,7 @@ Which provide time stamped messages. One time I was setting up a new server and 
 
 Since it is often easiest to start from cookbook examples, I have uploaded examples shell scripts which you can use as a starting point for configuring your own environment:
 
-1.	To start and stop an MPS environment for **_all_** the GPUs on your system, run these scripts as root:
+To start and stop an MPS environment for **_all_** the GPUs on your system, run these scripts as root:
 
 	init_mps_for_all_gpus.sh
 	
@@ -85,7 +85,7 @@ If you do want to have each user set the locations of the pipe and log directori
 
 	$>. set_mps_env_for_all_gpus.sh
 
-2.	If you want to partition your GPUs into groups, run these scripts as root:
+If you want to partition your GPUs into groups, run these scripts as root:
 
 	init_mps_for_gpus.sh <dev1>,<dev2>,...
 	
@@ -152,17 +152,30 @@ Then you will have persistent access to all of the parameters and gradient data 
 
 If your model is resident on a GPU (courtesy model:cuda()), then the two tensors params and gradParams are CudaTensors and resident on the same GPU, and can now use nccl to transfer data directly between instances of them using functions such as `Bcast, `Reduce`, `AllReduce`, et al. 
 
-At this point, I suggest you take a look at the example script nccl-parallel.lua, which does the following:
+## Example of transfering data using `parallel` and `nccl`
 
-1.	It uses `Torch-parallel` to start a parent process and fork a number of child processes.
-2.	These processes talk to each other, by synchronizing (the parent calls `join` and the children call `yield`), and then passing data back and forth with the methods `send` and `receive`. Note that courtesy Torch’s serialization, you can pass arbitrary data structures back and forth, so long as have included the appropriate package (`require '<package>'`) which define the object(s) that need to be serialized. Note that parallel’s communication channel is intended for host-to-host (or CPU-to-CPU) communication; having said that, you can send a CudaTensor from one process to another and the serialization mechanism will create a CudaTensor() at  the receiving end, but this would not be an efficient way to send parameters or gradient parameters of cloned neural nets.
-3.	The processes set up a nccl communication channel. You will see where the parent creates a unique id to identify the group’s communication channel and passes that unique id to the child processes with parallel’s messaging functionality. Each process (parent and children) then creates its own communicator object. If you look at the nccl documentation you will find references to “ranks”. These are processes (or threads) by any other name. Very conveniently, the parallel package and the nccl libraries use the same numbering scheme for their process-id’s (in parallel’s case) or ranks (in nccl’s case), so you might as well use a “parallel.id” as the “rank” number. 
-4.	The section of script which sets up the nccl communicator object also illustrates how Lau scripts can interact with C-libraries. The relevant C API’s and data structures are provided in `nccl.h`, which has been encapsulated in a Lua-ffi wrapper  `nccl_ffi.h`. The workings of ffi are beyond the scope of this discussion, so just treat `nccl_ffi.h` as another thing to be “required”. 
-5.	Once the communicator objects have been set up, it is time to exercise the data transfer functionality. Each process creates send and receive buffers in the form of CudaTensors. We populate the tensor that is serving as the “sender” with some test data, and then call one of the nccl primitives. The processes will receive data in the tensor which is serving as the receive tensor. The awkward wording of the previous sentence is because the script also demonstrates how a single tensor can both send its data to other processes and then be populated by data it receives from those other processes. For simplicity, each child process populates its send tensor with its “parallel.id”, while the parent uses the arbitray number ‘10’.
-6.	Arguably the two most useful nccl functions are `AllReduce` and `Bcast`. `AllReduce` sums all the sending tensors and places the result into all the receiving tensors; the script implements two flavors: one where the sending tensor is also the receiving tensor (“in place”), and the second, where the receiving tensor is different from the sending tensor (“out of place”). Consider the case where we do an “in place” `AllReduce` on the gradParams tensor of each copy of a network – after the operation each of the gradParams will contain the sum of all the individual gradParams, which means they have the same values as would have been generated by passing all the training data through a single net. In other words, after AllReduce it suffices to call model:updateParameters() for each net. Alternatively, if you are considering ensemble training, you could first call `model:updateParameters()` on each net and then call `AllReduce` with the params tensors followed by `params:div(<#nets>)` to create an “average” of the nets.
-7.	There are other nccl operations (`Gather` and `Scatter`) which you can implement using this script as a template.
+Scripts:
 
-Example of a multi-process, multi-GPU training harness
+	parallel-nccl.lua
+	nccl_ffi.lua
+
+This script fires up multiple processes and uses `nncl` to transfer data between there
+
+* It uses the `parallel` package to start a parent process and fork a number of child processes.
+
+* The parent and children processes talk to each other, by synchronizing (the parent calls `join` and the children call `yield`), and then passing data back and forth with the methods `send` and `receive`. Note that courtesy Torch’s serialization, you can pass arbitrary data structures back and forth, so long as have included the appropriate package (`require '<package>'`) which define the object(s) that need to be serialized. Note that parallel’s communication channel is intended for host-to-host (or CPU-to-CPU) communication; having said that, you can send a CudaTensor from one process to another and the serialization mechanism will create a CudaTensor() at  the receiving end, but this would not be an efficient way to send parameters or gradient parameters of cloned neural nets.
+
+* The processes set up a nccl communication channel. You will see where the parent creates a unique id to identify the group’s communication channel and passes that unique id to the child processes with parallel’s messaging functionality. Each process (parent and children) then creates its own communicator object. If you look at the nccl documentation you will find references to “ranks”. These are processes (or threads) by any other name. Very conveniently, the parallel package and the nccl libraries use the same numbering scheme for their process-id’s (in parallel’s case) or ranks (in nccl’s case), so you might as well use a “parallel.id” as the “rank” number. 
+
+* The section of script which sets up the nccl communicator object also illustrates how Lau scripts can interact with C-libraries. The relevant C API’s and data structures are provided in `nccl.h`, which has been encapsulated in a Lua-ffi wrapper  `nccl_ffi.h`. The workings of ffi are beyond the scope of this discussion, so just treat `nccl_ffi.h` as another thing to be “required”. 
+
+* Once the communicator objects have been set up, it is time to exercise the data transfer functionality. Each process creates send and receive buffers in the form of CudaTensors. We populate the tensor that is serving as the “sender” with some test data, and then call one of the nccl primitives. The processes will receive data in the tensor which is serving as the receive tensor. The awkward wording of the previous sentence is because the script also demonstrates how a single tensor can both send its data to other processes and then be populated by data it receives from those other processes. For simplicity, each child process populates its send tensor with its “parallel.id”, while the parent uses the arbitray number ‘10’.
+
+* Arguably the two most useful nccl functions are `AllReduce` and `Bcast`. `AllReduce` sums all the sending tensors and places the result into all the receiving tensors; the script implements two flavors: one where the sending tensor is also the receiving tensor (“in place”), and the second, where the receiving tensor is different from the sending tensor (“out of place”). Consider the case where we do an “in place” `AllReduce` on the gradParams tensor of each copy of a network – after the operation each of the gradParams will contain the sum of all the individual gradParams, which means they have the same values as would have been generated by passing all the training data through a single net. In other words, after AllReduce it suffices to call model:updateParameters() for each net. Alternatively, if you are considering ensemble training, you could first call `model:updateParameters()` on each net and then call `AllReduce` with the params tensors followed by `params:div(<#nets>)` to create an “average” of the nets.
+
+* You can use this script as a template for other `nccl operations` (such as, `Gather` and `Scatter`)
+
+## Example of a multi-process, multi-GPU training harness
 
 Scripts:  
 
