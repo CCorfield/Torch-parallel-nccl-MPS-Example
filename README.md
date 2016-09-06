@@ -1,4 +1,4 @@
-# Torch-parallel-nccl-MPSExample
+# Using Torch-parallel-nccl-MPS for multi-process, multi-GPU training
 
 ## Abstract:
 This note outlines how to do multi-process, multi-GPU neural-net training from within the Torch toolkit.
@@ -194,7 +194,9 @@ To train the net, run:
 
 	$> th Train.lua
 
-If this completes successfully, it will save a copy of the trained net in a `Torch` binary file `ExampleModel.t7`. The net is trained to recognize odd and even numbers in the range [1, 10] (yup, it is that simple). A minor digression: I have included a version of Nesterov training which is more rigorous than the one in the `optim` package. You can train the net in two different ways: 
+If this completes successfully, it will save a copy of the trained net in a `Torch` binary file `ExampleModel.t7`. The net is trained to recognize odd and even numbers in the range [1, 10] (yup, it is that simple). A minor digression: I have included a version of Nesterov training which is more rigorous than the one in `Torch's` `optim` package. 
+
+You can train the net in two different ways: 
 
 - Share the gradient data between the models and then update each model independently
 
