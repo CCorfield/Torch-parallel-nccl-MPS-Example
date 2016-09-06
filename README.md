@@ -9,7 +9,7 @@ There are applications of machine learning where it is desirable to be able to l
 ## Torch-Parallel:
 The parallel package provides a framework for a parent process to fork multiple child processes and a means for the processes to communicate with each other (it uses ZeroMQ for the inter-process communication). You can find parallel on GitHub at https://github.com/clementfarabet/lua---parallel and you can install it with:
 
-```$> luarocks install parallel```
+	```$> luarocks install parallel```
 
 This package has a dependency on `libzmq` and `libzmq-dev` -- in my Ubuntu environment the packages are `libzmq3` and `libzmq3-dev`.
 
@@ -31,6 +31,7 @@ You may want to log in from a remote shell before stopping X.
 3.	Now specify which GPUs are going to be part of the multi-process ensemble. In general you can partition your GPUs into disjoint groups, where each group can run a multi-process training ensemble. To set up a group, do the following as root:
 
 	```$> export CUDA_VISIBLE_DEVICES=<dev#1>,<dev#2>,...```
+	
 	```$> nvidia-cuda-mps-control -d```
 	
 This will launch a control daemon that will oversee the group of GPUs specified with `EXCLUSIVE_PROCESS`. The daemon launches and terminates instances of `mps-server` to broker computing requests to the GPUs within the ensemble. Since the GPUs are running in “exclusive compute mode”, you will only see one process running on them when you run `nvidia-smi`. Note that only one user at a time has access to the group of GPUs, later users will block until the first user has finished.
@@ -38,6 +39,7 @@ This will launch a control daemon that will oversee the group of GPUs specified 
 Once you have set up MPS and started the mps daemon (`nvidia-cuda-mps-control`) on a group of GPUs, you can run your Torch scripts on that group. However, you first need to set a couple of environment variables so that the CUDA libraries can find the instance of the mps daemon that is managing the GPUs you want to run on. You will need set the following environment variables:
 
 	```$> export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps```
+	
 	```$> export CUDA_MPS_LOG_DIRECTORY=/var/log/nvidia-mps```
 	
 In the above two lines I have put in the default values that CUDA uses for its pipe and log directories. In practice, you will only need to set these environment variables when you have configured an mps daemon to use non-default locations for its pipe and log directories, which will be the case if you have partitioned your GPUs into two, or more, groups. 
@@ -50,17 +52,23 @@ If you have set up MPS to control all your devices, you won't need to set this e
 
 To test your configuration, start “th” at a terminal prompt and entering the following:
 
-	```th> require 'cutorch'```
+	```th> require "cutorch"```
+	
 	```th> cutorch.getDeviceCount()```
+	
 	```...```
+	
 	```th> cutorch.setDevice(<dev#>)```
+	
 	```...```
+
 	
 If you have configured everything correctly, you won’t get any complaints. On the other hand, if MPS is not running you may find that commands such as `require 'cutorch'`, or `cutorch.setDevice(2)` will fail.
 
 If you encounter problems, I suggest looking at the output from the daemon and server processes. In the log directory (default: `/var/log/nvidia-mps/`) there are two files:
 
 	```control.log```
+	
 	```server.log```
 
 Which provide time stamped messages. One time I was setting up a new server and I was puzzled why I was not seeing "mps-server" listed in the output from `nvidia-smi`, and there was a warning in the `server.log` about the number of available file descriptors. Sure enough, the new server had arrived configured with a limit of 1024 file descriptors.
@@ -70,6 +78,7 @@ Since it is often easiest to start from cookbook examples, I have uploaded examp
 1.	To start and stop an MPS environment for **_all_** the GPUs on your system, run these scripts as root:
 
 	```init_mps_for_all_gpus.sh```
+	
 	```stop_mps_for_all_gpus.sh [later on, when you tear down the environment]```
 	
 These two scripts use the default locations for the pipe and log directories, which means that you don’t have to set any user environment variables, the CUDA libraries incorporated within Torch will find these directories and communicate to the MPS daemon to start/stop mps-server processes. You may want to incorporate these scripts into your start-up process. 
@@ -81,11 +90,13 @@ If you do want to have each user set the locations of the pipe and log directori
 2.	If you want to partition your GPUs into groups, run these scripts as root:
 
 	```init_mps_for_gpus.sh <dev1>,<dev2>,...```
+	
 	```stop_mps_for_gpus.sh [later on, when you tear down the environment]```
 	
 Pass the group of GPUs to init_mps_for_gpus.sh as comma-separated list. This script will set up pipe and log directories in the following locations:
 
 	```/tmp/nvidia-mps_<dev1>_<dev2>_...```
+	
 	```/var/log/nvidia-mps_<dev1>_<dev2>```
 
 Note that nVidia counts devices from 0, whereas cutorch counts starting from 1. In this case, use nVidia’s method. Since the pipe and log directories are no longer in their default locations you must have every user set their locations in their environments before starting Torch scripts. You can have them source the following scripts:
@@ -132,11 +143,13 @@ For example, I have Torch installed under `/opt/torch`, which means the install 
 What makes nccl useful is the following feature of Torch: If your training script includes the following lines:
 
 	```model = model:cuda()```
+	
 	```params, gradParams = model:getParameters()```
 
 Then you will have persistent access to all of the parameters and gradient data within your net (`model`), no matter how complex it is. These two tensors provide a very convenient way to access the net’s parameters. Indeed the following are equivalent:
 
 	```model:updateParameters(learningRate)```
+	
 	```params:add(-learningRate, gradParams)```
 
 If your model is resident on a GPU (courtesy model:cuda()), then the two tensors params and gradParams are CudaTensors and resident on the same GPU, and can now use nccl to transfer data directly between instances of them using functions such as `Bcast, `Reduce`, `AllReduce`, et al. 
@@ -152,11 +165,23 @@ At this point, I suggest you take a look at the example script nccl-parallel.lua
 7.	There are other nccl operations (`Gather` and `Scatter`) which you can implement using this script as a template.
 
 Example of a multi-process, multi-GPU training harness
+
 Scripts:  
-	```Train.lua, Test.lua, Model.lua, Network.lua, DataSets.lua, Evaluate.lua, ccNesterov.lua, and nccl_ffi.lua```
+```
+Train.lua
+Test.lua
+Model.lua
+Network.lua
+DataSets.lua
+Evaluate.lua
+ccNesterov.lua
+nccl_ffi.lua
+```
+	
 These scripts implement a simple training harness which illustrates how Torch, MPS, and nccl can be used to orchestrate a multi-process, multi-GPU training harness. 
 
 To train the net, run:
+
 	```$> th Train.lua```
 
 To test the net, run:
