@@ -1,19 +1,19 @@
 # Using Torch-parallel-nccl-MPS for multi-process, multi-GPU training
 
-## Abstract:
+## Abstract
 This note outlines how to do multi-process, multi-GPU neural-net training from within the Torch toolkit.
 
-## Introduction:
+## Introduction
 There are applications of machine learning where it is desirable to be able to leverage the computing power of an ensemble of GPUs to train a neural net. The architecture of GPUs and CPUs allows us to consider parallel processing on both the GPU and CPU. On the CPU this may take the form of parallel threads, or parallel processes, leveraging the multi-core architecture of contemporary CPUs. In the Torch there are packages for both threaded and multi-process. I will focus on the “parallel” package for multi-process training. 
 
-## Torch-Parallel:
+## Torch-Parallel
 The parallel package provides a framework for a parent process to fork multiple child processes and a means for the processes to communicate with each other (it uses ZeroMQ for the inter-process communication). You can find parallel on GitHub at https://github.com/clementfarabet/lua---parallel and you can install it with:
 
 	$> luarocks install parallel
 
 This package has a dependency on `libzmq` and `libzmq-dev` -- in my Ubuntu environment the packages are `libzmq3` and `libzmq3-dev`.
 
-## nVidia-MPS:
+## nVidia-MPS
 Now consider the following situation: multiple copies of a neural net resident on multiple GPUs, which may include several copies of the net on each GPU. You can imagine running separate training harnesses for each instance, training each net independently, and at some point saving each net and combining them (e.g., take an average of the parameters). This feels clumsy and certainly not in the spirit of parallel processing. Consider one of the problems with this approach: time slicing on a GPU. nVidia GPUs will happily support multiple processes and users sharing a GPU, but as nVidia points out, the processor will grant exclusive access to the client processes in a round-robin fashion and since each process is unlikely to fully occupy all the cores of the GPU, it won’t be using all the processing power that is available. nVidia has partially addressed this issue with its “MPS” – Multi-Process Service – which allows computing requests from multiple processes run by the same user to be interleaved leading to greater occupancy of the GPU. To set up your GPUs to use MPS you can do the following:
 
 Stop all the processes which are using the GPU. If you are using a Linux box with X-Windows, you can stop it with:
@@ -129,7 +129,7 @@ One detail to note with MPS is that the daemon starts mps-server processes on de
 
 Once you have MPS running smoothly it is time to tackle the next issue in parallel processing: transferring data between multiple processes. nVidia’s documentation for MPS can be found at https://docs.nvidia.com/deploy/pdf/CUDA_Multi_Process_Service_Overview.pdf 
 
-## nVidia-NCCL:
+## nVidia-NCCL
 A training process repeatedly pushes data through a net, calculates the derivatives of the loss function with respect to the net’s parameters, and then makes small adjustments to those parameters with the belief, or hope, that this will trace a path to a location in parameter space, where the loss function is vanishingly small for any conforming input data. Given that training data sets are large, it is desirable to devise a divide-and-conquer strategy which will be quicker than pushing all the data through one instance of a net. One approach that comes to mind is to create multiple copies, or clones, of the net and to push different chunks of the data set through each copy which then raises the question: how do you keep the copies in synch with each other? The two obvious approaches are either (a) share accumulated gradient data before updating each net’s parameters; or (b) update each net’s parameters with its own accumulated gradient data, and then share the updated parameters between all the nets. In the Torch environment each model’s parameters and gradient parameters are stored as CudaTensors() which are resident in the memory of the GPUs and, therefore, the fastest way of transferring parameters or gradient parameters is go directly from GPU to GPU and not take a detour through host memory. nVidia provides a mechanism for doing this called “nccl”, pronounced “nickel”. For Torch users, this means using CudaTensors, which may be resident on the same GPU or on different GPUs, and being able to copy data directly between them. nVidia makes “nccl” available as a C-library and header file, which means that its functionality can be exposed to Torch/Lua scripts – Lua provides a way to expose C APIs within Lua scripts. 
 
 To make nccl available to your Torch environment, visit nVidia’s nccl page on GitHub (https://github.com/NVIDIA/nccl) and download the package of files to some directory, e.g., `/.../nccl/`. Cd into that directory and follow the instructions to build the nccl library and run the optional tests. Install the library into your Torch environment with
