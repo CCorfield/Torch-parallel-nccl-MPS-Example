@@ -4,14 +4,14 @@
 This note outlines how to do multi-process, multi-GPU neural-net training from within the Torch toolkit.
 
 ## Introduction
-There are applications of machine learning where it is desirable to be able to leverage the computing power of an ensemble of GPUs to train a neural net. The architecture of GPUs and CPUs allows us to consider parallel processing on both the GPU and CPU. On the CPU this may take the form of parallel threads, or parallel processes, leveraging the multi-core architecture of contemporary CPUs. In the Torch there are packages for both threaded and multi-process. I will focus on the “parallel” package for multi-process training. 
+There are applications of machine learning where it is desirable to be able to leverage the computing power of an ensemble of GPUs to train a neural net. The architecture of GPUs and CPUs allows us to consider parallel processing on both the GPU and CPU. On the CPU this may take the form of parallel threads, or parallel processes, leveraging the multi-core architecture of contemporary CPUs. In the Torch there are packages for both threaded and multi-process. I will focus on the `parallel` package for multi-process training (for threaded approach see the `threads` package (https://github.com/torch/threads) or `data parallel table` (https://github.com/torch/cunn/blob/master/doc/cunnmodules.md). 
 
 ## Torch-Parallel
 The parallel package provides a framework for a parent process to fork multiple child processes and a means for the processes to communicate with each other (it uses ZeroMQ for the inter-process communication). You can find parallel on GitHub at https://github.com/clementfarabet/lua---parallel and you can install it with:
 
 	$> luarocks install parallel
 
-This package has a dependency on `libzmq` and `libzmq-dev` -- in my Ubuntu environment the packages are `libzmq3` and `libzmq3-dev`.
+This package has a dependency on `libzmq` and `libzmq-dev` -- in my Ubuntu environment the installed versions are `libzmq3` and `libzmq3-dev`.
 
 ## nVidia-MPS
 Now consider the following situation: multiple copies of a neural net resident on multiple GPUs, which may include several copies of the net on each GPU. You can imagine running separate training harnesses for each instance, training each net independently, and at some point saving each net and combining them (e.g., take an average of the parameters). This feels clumsy and certainly not in the spirit of parallel processing. Consider one of the problems with this approach: time slicing on a GPU. nVidia GPUs will happily support multiple processes and users sharing a GPU, but as nVidia points out, the processor will grant exclusive access to the client processes in a round-robin fashion and since each process is unlikely to fully occupy all the cores of the GPU, it won’t be using all the processing power that is available. nVidia has partially addressed this issue with its “MPS” – Multi-Process Service – which allows computing requests from multiple processes run by the same user to be interleaved leading to greater occupancy of the GPU. You can find nVidia's documentation on MPS at: https://docs.nvidia.com/deploy/pdf/CUDA_Multi_Process_Service_Overview.pdf. 
