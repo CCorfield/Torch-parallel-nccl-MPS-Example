@@ -170,7 +170,13 @@ Scripts:
 	parallel-nccl.lua
 	nccl_ffi.lua
 
-* It uses the `parallel` package to start a parent process and fork a number of child processes.
+To run:
+
+	$> th parallel-nccl.lua | sort
+
+Since parallel processes execute asynchronously, I use `sort` to re-order their output so that it is easier to see what is going on.
+
+* The example uses the `parallel` package to start a parent process and fork a number of child processes.
 
 * The parent and children processes talk to each other, by first synchronizing (the parent calls `join` and the children call `yield`), and then passing data back and forth with the methods `send` and `receive`. Note that, courtesy Torch’s serialization, you can pass arbitrary data structures back and forth, so long as you have included the appropriate package (`require '<package>'`) which defines the object(s) that need to be serialized. Note that `parallel’s` communication channel is intended for host-to-host (or CPU-to-CPU) communication; having said that, you can use `parallel` to send a CudaTensor from one process to another and the serialization mechanism will create a CudaTensor() at the receiving end, although this would not be an efficient way to send parameters or gradient parameters of large neural nets.
 
