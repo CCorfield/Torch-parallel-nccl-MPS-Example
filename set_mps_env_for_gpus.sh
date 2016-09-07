@@ -20,3 +20,5 @@ suffix=${devices//,/_}
 export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps_$suffix
 export CUDA_MPS_LOG_DIRECTORY=/var/log/nvidia-mps_$suffix
 
+
+#set +x

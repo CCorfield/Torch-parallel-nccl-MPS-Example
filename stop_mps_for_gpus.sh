@@ -34,3 +34,5 @@ rm -rf $CUDA_MPS_LOG_DIRECTORY
 # Clean-up environment variables
 unset CUDA_MPS_PIPE_DIRECTORY
 unset CUDA_MPS_LOG_DIRECTORY
+
+#set +x

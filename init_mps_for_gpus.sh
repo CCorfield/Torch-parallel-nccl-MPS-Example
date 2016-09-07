@@ -56,3 +56,5 @@ taskset -c 0 nvidia-cuda-mps-control -d 1>/dev/null 2>&1
 unset CUDA_VISIBLE_DEVICES
 unset CUDA_MPS_PIPE_DIRECTORY
 unset CUDA_MPS_LOG_DIRECTORY
+
+#set +x

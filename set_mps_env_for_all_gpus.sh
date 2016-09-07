@@ -11,3 +11,5 @@ echo "Setting environment variables for MPS..."
 # Default locations for the pipe and log directories
 export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps
 export CUDA_MPS_LOG_DIRECTORY=/var/log/nvidia-mps
+
+#set +x

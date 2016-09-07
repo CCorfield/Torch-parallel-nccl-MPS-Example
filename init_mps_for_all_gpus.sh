@@ -7,7 +7,7 @@
 #
 # To halt the mps daemon run stop_mps_for_all_gpus.sh (as root)
 #
-set -x
+#set -x
 
 echo "Starting mps daemon for all GPUs..."
 
@@ -35,3 +35,5 @@ ps -ef | grep -v grep | grep "nvidia-cuda-mps-control"
 if [ $? -ne 0 ]; then 
   taskset -c 0 nvidia-cuda-mps-control -d 
 fi
+
+#set +x

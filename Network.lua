@@ -27,8 +27,12 @@ local Evaluate = require 'Evaluate'
 
 local Network = {}
 
-local debug = false
 local model, params, gradParams
+
+local syncGradParams = true            -- If true, share all the gradParameters before updating each net
+local syncParams = not syncGradParams  -- If true, average nets after updating individually
+
+local debug = false
 
 -- These are the items used by the various update algorithms defined in the optim package
 local updateConfig = {} -- See below to set the values you want
@@ -153,16 +157,6 @@ local function parallelSyncAll(msg)
   end
 end
 
--- Initialize parameters used to calculate learning rates and updates
-local runningGradParamsNorm  = 0
-local runningDeltaParamsNorm = 0
-local rho = 0.9 -- Factor used in running averages
-local epsilon = 1e-6 -- Prevents underflows
-local learningRate = 0
-local deltaParamsNorm = 0
-local paramsNorm = 0
-local gradParamsNorm = 0
-
 function Network.trainAndUpdateModel(numSamples, numWorkers, comm, workerID)
   local ncclResult, ncclErrString
   
@@ -207,27 +201,24 @@ function Network.trainAndUpdateModel(numSamples, numWorkers, comm, workerID)
 
   cutorch.setDevice(model.gpu)
   sys.tic()
-  collectgarbage('stop')
-  assert(gradParams:isContiguous(), "gradParams not contiguous") 
-  parallelSyncAll("Just before AllReduce")
-  ncclResult = nccl.C.ncclAllReduce(gradParams:data(), gradParams:data(), -- In place version
-    gradParams:size(1), nccl.C.ncclFloat,
-    nccl.C.ncclSum, comm[0],
-    ffi.C.THCState_getCurrentStream(cutorch.getState()))
-  ncclErrString = ffi.string(nccl.C.ncclGetErrorString(ncclResult))
-  assert(ncclResult == nccl.C.ncclSuccess, ncclErrString) 
-  assert(cutorch.getDevice() == model.gpu, "Mismatch in current GPU") -- There shouldn't be any change in device through the AllReduce() 
-  parallelSyncAll("Just after AllReduce. Status = " .. ncclErrString)
+
+  if(syncGradParams) then
+    collectgarbage('stop')
+    parallelSyncAll("Just before AllReduce")
+    ncclResult = nccl.C.ncclAllReduce(gradParams:data(), gradParams:data(), -- In place version
+      gradParams:size(1), nccl.C.ncclFloat,
+      nccl.C.ncclSum, comm[0],
+      ffi.C.THCState_getCurrentStream(cutorch.getState()))
+    ncclErrString = ffi.string(nccl.C.ncclGetErrorString(ncclResult))
+    parallelSyncAll("Just after AllReduce. Status = " .. ncclErrString)
+    collectgarbage('restart')
+    gradParams:div(numWorkers)
+  end
     
   if(debug or parallel.id == 0) then
     parallel.print("GradParams norm = " .. Network.getGradParamsNorm())
     io.flush()
   end  
-
-  collectgarbage('restart')
-  
-  -- Prevent numerical instabilities:
-  -- gradParams:clamp(-val, val) Figure out values to put here, if necessary
 
   -- Here is where we do the model update according to the selected method (see above)
   -- Note the implicit assumption that everything is first order (i.e. linear)
@@ -245,6 +236,20 @@ function Network.trainAndUpdateModel(numSamples, numWorkers, comm, workerID)
   
   -- Dereference function pointer to the update method
   updateConfig.method(opfunc, params, updateConfig, updateMethodState)
+
+  -- Use this option to combine networks after their individual updates
+  if(syncParams) then
+    collectgarbage('stop')
+    parallelSyncAll("Just before AllReduce")
+    ncclResult = nccl.C.ncclAllReduce(params:data(), params:data(), -- In place version
+      params:size(1), nccl.C.ncclFloat,
+      nccl.C.ncclSum, comm[0],
+      ffi.C.THCState_getCurrentStream(cutorch.getState()))
+    ncclErrString = ffi.string(nccl.C.ncclGetErrorString(ncclResult))
+    parallelSyncAll("Just after AllReduce. Status = " .. ncclErrString)
+    collectgarbage('restart')
+    params:div(numWorkers)
+  end
 
   -- Note time taken for update
   local timeForUpdate = sys.toc()

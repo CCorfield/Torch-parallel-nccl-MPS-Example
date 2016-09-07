@@ -12,3 +12,5 @@ echo "quit" | nvidia-cuda-mps-control
 
 rm -rf /tmp/nvidia-mps
 rm -rf /var/log/nvidia-mps
+
+#set +x
