@@ -91,7 +91,7 @@ If you want to partition your GPUs into groups, run these scripts as root:
 
 	init_mps_for_gpus.sh <dev1>,<dev2>,...
 	
-	stop_mps_for_gpus.sh [when you tear down the environment]
+	stop_mps_for_gpus.sh <dev1>,<dev2>,... [when you tear down the environment]
 	
 Pass the group of GPUs into `init_mps_for_gpus.sh` as comma-separated list. This script will set up pipe and log directories in the following locations:
 
