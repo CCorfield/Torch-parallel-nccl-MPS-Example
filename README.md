@@ -1,4 +1,4 @@
-# Using Torch-parallel-nccl-MPS for multi-process, multi-GPU training
+# Using Torch, parallel, nccl, & MPS for multi-process, multi-GPU training
 
 ## Abstract
 This documentation outlines how to do multi-process, multi-GPU neural-net training from within the Torch toolkit.
