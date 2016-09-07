@@ -1,7 +1,7 @@
 # Using Torch, parallel, nccl, and MPS for multi-process, multi-GPU training
 
 ## Abstract
-This documentation outlines how to do multi-process, multi-GPU neural-net training from within the Torch toolkit.
+This document outlines how to do multi-process, multi-GPU neural-net training from within the Torch toolkit.
 
 ## Introduction
 There are applications of machine learning where it is desirable to leverage the computing power of an ensemble of GPUs to train a neural net. The architecture of GPUs and CPUs allows us to consider parallel processing on the GPU and CPU. On the CPU this may take the form of parallel threads, or parallel processes, exploiting the multi-core architecture of contemporary CPUs, while on the GPU, this takes the form of computing kernels to break algebraic calculations into a swarm of parallel operations. In the Torch there are packages for both threaded and multi-process implementations. I will focus on the `parallel` package for multi-process training (for threaded approach see the `threads` package (GitHub location -- https://github.com/torch/threads) or `data parallel table` (GitHub  location -- https://github.com/torch/cunn/blob/master/doc/cunnmodules.md). 
