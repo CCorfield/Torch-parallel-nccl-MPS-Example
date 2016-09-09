@@ -4,7 +4,7 @@
 # Initialize the user environment after starting MPS
 # We look for the pipe directory in /tmp/nvidia-mps* and deduce which devices are in play.
 #
-#set -x
+set -x
 
 # Message
 echo "Setting MPS environment variables..."
@@ -14,19 +14,20 @@ suffix=''
 devices=''
 pipedir=`ls /tmp | grep 'nvidia-mps'`
 
-if [ $pipedir != '' ]; then
-  suffix=${pipedir//nvidia-mps?/}
-  devices=${suffix//_/,}
+if [ "$pipedir" != '' ]; then
+  suffix=${pipedir//nvidia-mps/}
+  suffix=${suffix/^_/}   # Trim leading underscore, if any
+  devices=${suffix//_/,} # Convert underscores to commmas
 fi
 
 # Suffix is either a comma separated list of devices, or blank
-if [ $suffix == '' ]; then
+if [ "$devices" == '' ]; then
   export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps
   export CUDA_MPS_LOG_DIRECTORY=/var/log/nvidia-mps
 else
+  export CUDA_VISIBLE_DEVICES=$devices
   export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps_$suffix
   export CUDA_MPS_LOG_DIRECTORY=/var/log/nvidia-mps_$suffix
-  export CUDA_VISIBLE_DEVICES=$devices
 fi
 
-#set +x
+set +x
