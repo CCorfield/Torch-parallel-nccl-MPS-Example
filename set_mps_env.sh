@@ -15,8 +15,7 @@ devices=''
 pipedir=`ls /tmp | grep 'nvidia-mps'`
 
 if [ "$pipedir" != '' ]; then
-  suffix=${pipedir//nvidia-mps/}
-  suffix=${suffix/^_/}   # Trim leading underscore, if any
+  suffix=`echo $pipedir | sed 's,nvidia-mps_\?,,'`
   devices=${suffix//_/,} # Convert underscores to commmas
 fi
 
