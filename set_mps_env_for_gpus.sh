@@ -14,11 +14,10 @@ devices=$1
 echo "Setting MPS environment variables..."
 
 # Create suffix for directory names by replacing all commas with underscores
-suffix=${devices//,/_}
+suffix=`echo ${devices} | sed -e 's/,/_/g'`
 
 # Set the environment variables for the daemon
 export CUDA_MPS_PIPE_DIRECTORY=/tmp/nvidia-mps_$suffix
 export CUDA_MPS_LOG_DIRECTORY=/var/log/nvidia-mps_$suffix
-
 
 #set +x
